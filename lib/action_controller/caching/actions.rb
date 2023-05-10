@@ -156,13 +156,19 @@ module ActionController
           path_options = expand_option(controller, @cache_path)
           cache_path = ActionCachePath.new(controller, path_options || {})
 
+          # read_entry of RedisCacheStore impl is not used `expires_in` option.
           body = controller.read_fragment(cache_path.path, @store_options)
 
           unless body
             controller.action_has_layout = false unless cache_layout
             yield
             controller.action_has_layout = true
-            body = controller._save_fragment(cache_path.path, @store_options)
+            # evaluate `expires_in_proc`` to set `expires_at` option.
+            if (evaled_expires_in = expand_option(controller, @store_options[:expires_in_proc]))
+              body = controller._save_fragment(cache_path.path, @store_options.merge(expires_in: evaled_expires_in))
+            else
+              body = controller._save_fragment(cache_path.path, @store_options)
+            end
           end
 
           body = render_to_string(controller, body) unless cache_layout
